@@ -65,25 +65,27 @@ button{font:inherit;color:inherit}
 #bossbar .bar i{background:var(--hp-low)}
 
 /* 記録 */
-#log{height:4.6em;overflow:hidden;font-size:13px;line-height:1.15em;background:var(--stone);border:1px solid var(--stone-3);
-  border-radius:8px;padding:6px 10px;display:flex;flex-direction:column;justify-content:flex-end}
-#log p{margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink-dim)}
+#log{--lines:4;height:calc(var(--lines) * 1.5em);overflow:hidden;font-size:13px;line-height:1.5;background:var(--stone);border:1px solid var(--stone-3);
+  border-radius:8px;padding:5px 10px;display:flex;flex-direction:column;justify-content:flex-end;flex:none}
+#log p{margin:0;color:var(--ink-dim);overflow-wrap:anywhere}
 #log p:last-child{color:var(--ink)}
 .c-dmg{color:var(--hp-low)!important}.c-good{color:var(--hp)!important}.c-sys{color:var(--brass)!important}.c-info{color:var(--mana)!important}
 
 /* 操作盤 */
-#pad{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:center;padding-bottom:2px}
-#dpad{display:grid;grid-template-columns:repeat(3,54px);grid-template-rows:repeat(3,54px);gap:5px}
+/* 移動ボタンを広く（左 約6割）、右の行動ボタンは細めにして、行の高さをそろえる */
+#pad{--row:58px;display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:10px;align-items:start;padding-bottom:2px;flex:none}
+#dpad{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:var(--row);gap:5px}
 .key{border:1px solid var(--edge);background:linear-gradient(180deg,var(--stone-3),var(--stone-2));border-radius:10px;
   font-family:var(--font-display);font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;
   box-shadow:0 2px 0 var(--void);touch-action:none}
 .key:active,.key.on{transform:translateY(1px);box-shadow:none;background:var(--stone-3);border-color:var(--brass-deep)}
 .key:focus-visible,.btn:focus-visible,.opt:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
-.key.mid{font-size:11px;color:var(--ink-dim);letter-spacing:.05em}
-#acts{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;min-width:0}
-.act{height:52px;border:1px solid var(--edge);background:var(--stone-2);border-radius:10px;font-family:var(--font-display);
-  font-size:15px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;line-height:1.1}
-.act small{font-size:10px;color:var(--ink-dim);letter-spacing:.06em}
+.key{font-size:22px}
+.key.mid{font-size:12px;color:var(--ink-dim);letter-spacing:.02em;white-space:nowrap}
+#acts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:var(--row);gap:5px;min-width:0}
+.act{min-width:0;padding:0 2px;border:1px solid var(--edge);background:var(--stone-2);border-radius:10px;font-family:var(--font-display);
+  font-size:15px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;line-height:1.1;white-space:nowrap;overflow:hidden}
+.act small{font-size:10px;color:var(--ink-dim);letter-spacing:0}
 .act.primary{border-color:var(--brass-deep);color:var(--brass)}
 .act:active{background:var(--stone-3)}
 
@@ -127,7 +129,9 @@ button{font:inherit;color:inherit}
 #title .menu{display:flex;flex-direction:column;gap:10px;width:min(280px,100%)}
 #title .note{font-size:12px;color:var(--ink-dim);min-height:1.4em}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
-@media (max-height:640px){#dpad{grid-template-columns:repeat(3,46px);grid-template-rows:repeat(3,46px)}.act{height:44px}#log{height:3.5em}}
+@media (max-height:700px){#log{--lines:3}#pad{--row:54px}}
+@media (max-height:560px){#pad{--row:52px}.act small{display:none}#status{padding-block:4px}}
+@media (max-width:380px){.act{font-size:14px}.act small{font-size:9px}}
 </style>
 
 <div id="app">
@@ -1310,8 +1314,8 @@ function resize(){
   const r=$('view').getBoundingClientRect();
   cssW=Math.max(1,r.width);cssH=Math.max(1,r.height);DPR=Math.min(3,window.devicePixelRatio||1);
   cv.width=Math.round(cssW*DPR);cv.height=Math.round(cssH*DPR);
-  TS=clamp(Math.floor(cssW/11),26,48);
-  requestDraw();
+  TS=clamp(Math.min(Math.floor(cssW/11),Math.floor(cssH/7)),24,48); // 横11マス・縦7マス以上が見える大きさ
+  renderLog();requestDraw();
 }
 let rafPending=false;
 function requestDraw(){if(!rafPending){rafPending=true;requestAnimationFrame(draw);}}
@@ -1448,7 +1452,12 @@ function updateStatus(){
 function renderLog(){
   const el=$('log');if(!G){el.innerHTML='';return;}
   el.innerHTML='';
-  for(const l of G.log.slice(-4)){const p=document.createElement('p');p.textContent=l.t;if(l.c)p.className=l.c;el.appendChild(p);}
+  for(const l of G.log.slice(-6)){const p=document.createElement('p');p.textContent=l.t;if(l.c)p.className=l.c;el.appendChild(p);}
+  // 枠に収まらない古い行は上から消して、途中で切れた行が出ないようにする
+  const cs=getComputedStyle(el),avail=el.clientHeight-parseFloat(cs.paddingTop)-parseFloat(cs.paddingBottom);
+  const hgt=c=>c.getBoundingClientRect().height;
+  let total=0;for(const c of el.children)total+=hgt(c);
+  while(total>avail+1&&el.children.length>1){total-=hgt(el.firstChild);el.removeChild(el.firstChild);}
 }
 let bannerTimer=null;
 function showBanner(text,ms){
