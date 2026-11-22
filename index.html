@@ -219,12 +219,14 @@ h2 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 1
       <div class="keys">
         <span class="kbd">← →</span><span>左右にスワイプしてレーンを移動</span>
         <span class="kbd">↑</span><span>上にスワイプしてジャンプ</span>
-        <span class="kbd">PC</span><span>矢印キー / A・D・W / スペース、P で一時停止</span>
+        <span class="kbd">↓</span><span>下にスワイプしてスライディング（空中なら急降下）</span>
+        <span class="kbd">PC</span><span>矢印キー / WASD / スペース、P で一時停止</span>
       </div>
       <ul class="help-list">
         <li><span class="ic" style="background:#8f8578">壁</span><div><b>石の壁</b><span class="d">高くて跳べない。左右によけよう</span></div></li>
         <li><span class="ic" style="background:#8b5a2b">倒木</span><div><b>倒木</b><span class="d">道をふさぐ。ジャンプで越えよう</span></div></li>
-        <li><span class="ic" style="background:#2a1d14">穴</span><div><b>落とし穴</b><span class="d">ジャンプで越えるか、穴のないレーンへ</span></div></li>
+        <li><span class="ic" style="background:#2a1d14">穴</span><div><b>落とし穴</b><span class="d">道いっぱいの穴。コインを目印にジャンプ</span></div></li>
+        <li><span class="ic" style="background:#c98a08">門</span><div><b>くぐり門</b><span class="d">頭の高さの横木。スライディングでくぐろう</span></div></li>
         <li><span class="ic" style="background:#3aa7d8">盾</span><div><b>シールド</b><span class="d">ぶつかっても1回だけ守ってくれる</span></div></li>
         <li><span class="ic" style="background:#e0456a">磁</span><div><b>マグネット</b><span class="d">しばらくコインを引き寄せる</span></div></li>
       </ul>
@@ -306,13 +308,13 @@ const THEMES = {
 
 const STAGES = [
   { name: 'はじまりの草原', theme: 'meadow', len: 500, speed: 11, gap: [1.4, 2.1], pats: ['coins', 'wall1', 'wall1', 'log', 'wall1', 'log'] },
-  { name: '風の丘', theme: 'hill', len: 600, speed: 12, gap: [1.5, 2.3], pats: ['coins', 'wall1', 'log', 'pit1', 'wall2', 'pit1'] },
-  { name: '砂岩の谷', theme: 'canyon', len: 700, speed: 13, gap: [1.4, 2.1], pats: ['wall1', 'wall2', 'log', 'pit1', 'pit2', 'pitAll', 'coins', 'item'] },
-  { name: '夕焼けの道', theme: 'sunset', len: 800, speed: 14, gap: [1.3, 2.0], pats: ['wall2', 'log', 'pit2', 'pitAll', 'wallLog', 'item', 'wall1', 'coins'] },
-  { name: '霧の森', theme: 'forest', len: 850, speed: 15, gap: [1.2, 1.8], pats: ['wall2', 'pit2', 'pitAll', 'wallLog', 'zigzag', 'item', 'log'] },
-  { name: '雪の峠', theme: 'snow', len: 950, speed: 16, gap: [1.1, 1.7], pats: ['wall2', 'pit2', 'pitAll', 'wallLog', 'zigzag', 'item', 'log', 'pit1'] },
-  { name: '灯りの夜道', theme: 'night', len: 1050, speed: 17, gap: [1.0, 1.6], pats: ['wall2', 'pit2', 'pitAll', 'wallLog', 'zigzag', 'item', 'pitWall'] },
-  { name: '星降る頂', theme: 'summit', len: 1200, speed: 18, gap: [0.95, 1.5], pats: ['wall2', 'pit2', 'pitAll', 'wallLog', 'zigzag', 'item', 'pitWall', 'log'] },
+  { name: '風の丘', theme: 'hill', len: 600, speed: 12, gap: [1.5, 2.2], pats: ['wall1', 'log', 'pit', 'pit', 'duck', 'wall2', 'pit', 'coins'] },
+  { name: '砂岩の谷', theme: 'canyon', len: 700, speed: 13, gap: [1.4, 2.1], pats: ['wall2', 'log', 'pit', 'pit', 'pit', 'duck', 'item', 'wall1', 'coins'] },
+  { name: '夕焼けの道', theme: 'sunset', len: 800, speed: 14, gap: [1.3, 2.0], pats: ['wall2', 'log', 'pit', 'pit', 'duck', 'wallLog', 'item', 'pitPit', 'duckWall'] },
+  { name: '霧の森', theme: 'forest', len: 850, speed: 15, gap: [1.2, 1.8], pats: ['wall2', 'pit', 'pit', 'duck', 'wallLog', 'zigzag', 'item', 'pitPit', 'duckWall'] },
+  { name: '雪の峠', theme: 'snow', len: 950, speed: 16, gap: [1.1, 1.7], pats: ['wall2', 'pit', 'pit', 'duck', 'wallLog', 'zigzag', 'item', 'pitPit', 'duckWall', 'log'] },
+  { name: '灯りの夜道', theme: 'night', len: 1050, speed: 17, gap: [1.0, 1.6], pats: ['wall2', 'pit', 'pit', 'duck', 'wallLog', 'zigzag', 'item', 'pitWall', 'duckWall', 'pitPit'] },
+  { name: '星降る頂', theme: 'summit', len: 1200, speed: 18, gap: [0.95, 1.5], pats: ['wall2', 'pit', 'pit', 'duck', 'wallLog', 'zigzag', 'item', 'pitWall', 'duckWall', 'pitPit', 'log'] },
 ];
 
 /* ---------- helpers ---------- */
@@ -331,25 +333,23 @@ function buildStage(i) {
   const lanes = [-1, 0, 1];
   const pick = a => a[Math.floor(r() * a.length)];
   const other = l => pick(lanes.filter(x => x !== l));
-  const coinRow = (p, lane, n, step = 2.2) => { for (let k = 0; k < n; k++) O.push({ type: 'coin', p: p + k * step, x: lane * LANE, y: 0.7 }); };
+  const coinRow = (p, lane, n, step = 2.2, y = 0.7) => { for (let k = 0; k < n; k++) O.push({ type: 'coin', p: p + k * step, x: lane * LANE, y }); };
   const coinArc = (p, lane) => { [0.9, 1.35, 1.65, 1.35, 0.9].forEach((h, k) => O.push({ type: 'coin', p: p - 4 + k * 2, x: lane * LANE, y: h })); };
   const wall = (p, lane) => O.push({ type: 'wall', p, len: 0.9, x: lane * LANE, h: 2.4 });
   const log = p => O.push({ type: 'log', p, len: 0.55, h: 0.6 });
-  const pit = (p, len, ls) => {
-    ls = [...ls].sort((a, b) => a - b);
-    const flush = (a, b) => O.push({ type: 'pit', p, len, x1: a === -1 ? -ROADW : a * LANE - LANE / 2, x2: b === 1 ? ROADW : b * LANE + LANE / 2 });
-    let start = ls[0], prev = ls[0];
-    for (let k = 1; k < ls.length; k++) { if (ls[k] !== prev + 1) { flush(start, prev); start = ls[k]; } prev = ls[k]; }
-    flush(start, prev);
-  };
+  const beam = p => O.push({ type: 'beam', p, len: 0.6, y1: 1.1, y2: 1.75 });
+  // pits always span the whole road, so they must be jumped; a coin arc over each one marks the jump
+  const pitLen = 3.0 + i * 0.12;
+  const pit = p => { O.push({ type: 'pit', p, len: pitLen, x1: -ROADW, x2: ROADW }); coinArc(p + pitLen / 2, pick(lanes)); };
   const P = {
     coins: () => { const L = pick(lanes); coinRow(curP, L, 7); return 15; },
     wall1: () => { const L = pick(lanes); wall(curP, L); coinRow(curP - 6, other(L), 5); return 3; },
     wall2: () => { const F = pick(lanes); lanes.filter(l => l !== F).forEach(l => wall(curP, l)); coinRow(curP - 6, F, 5); return 3; },
     log: () => { log(curP); coinArc(curP, pick(lanes)); return 5; },
-    pit1: () => { const L = pick(lanes); pit(curP, 3.5, [L]); coinRow(curP - 4, other(L), 5); return 6; },
-    pit2: () => { const F = pick(lanes); pit(curP, 3.5, lanes.filter(l => l !== F)); coinRow(curP - 4, F, 5); return 6; },
-    pitAll: () => { pit(curP, 3.2, lanes); coinArc(curP + 1.6, pick(lanes)); return 6; },
+    pit: () => { pit(curP); return pitLen + 4; },
+    pitPit: v => { pit(curP); const q = curP + v * 0.95; pit(q); return q - curP + pitLen + 4; },
+    duck: () => { beam(curP); coinRow(curP - 3, pick(lanes), 3, 1.6, 0.5); return 3; },
+    duckWall: v => { beam(curP); coinRow(curP - 3, pick(lanes), 3, 1.6, 0.5); const q = curP + v * 1.05; const L = pick(lanes); wall(q, L); return q - curP + 3; },
     wallLog: v => { log(curP); coinArc(curP, pick(lanes)); const q = curP + v * 1.15; wall(q, pick(lanes)); return q - curP + 3; },
     zigzag: v => {
       const sp = v * 1.05; let F = pick([-1, 1]);
@@ -357,8 +357,8 @@ function buildStage(i) {
       return sp * 2 + 3;
     },
     pitWall: v => {
-      const F = pick(lanes); pit(curP, 3.5, lanes.filter(l => l !== F)); coinRow(curP - 4, F, 3);
-      const q = curP + v * 1.1, G2 = other(F); lanes.filter(l => l !== G2).forEach(l => wall(q, l)); coinRow(q - 4, G2, 3);
+      pit(curP);
+      const q = curP + v * 1.15, F = pick(lanes); lanes.filter(l => l !== F).forEach(l => wall(q, l)); coinRow(q - 4, F, 3);
       return q - curP + 3;
     },
     item: () => { const L = pick(lanes); O.push({ type: r() < 0.5 ? 'shield' : 'magnet', p: curP, x: L * LANE, y: 0.9 }); coinRow(curP + 3, pick(lanes), 6); return 16; },
@@ -406,6 +406,7 @@ const sfx = {
   clear: () => [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, .16, 'square', .04, null, i * .1)),
   fail: () => [392, 330, 262].forEach((f, i) => tone(f, .26, 'triangle', .08, null, i * .18)),
   go: () => tone(784, .22, 'square', .045),
+  slide: () => tone(240, .22, 'triangle', .07, 110),
 };
 
 /* ---------- canvas ---------- */
@@ -436,7 +437,7 @@ const G = {
 };
 const particles = [];
 function resetPlayer() {
-  G.p = { lane: 0, x: 0, y: 0, vy: 0, air: false, falling: 0, inv: 0, hearts: 3, shield: false, magnet: 0, run: 0 };
+  G.p = { lane: 0, x: 0, y: 0, vy: 0, air: false, slide: 0, slideQ: false, falling: 0, inv: 0, hearts: 3, shield: false, magnet: 0, run: 0 };
 }
 resetPlayer();
 
@@ -470,13 +471,23 @@ function jump(force = false) {
   const p = G.p;
   if (!force && (G.mode !== 'play' || G.over || p.falling)) return;
   if (p.air && !force) { G.jumpBuf = 0.14; return; }
+  p.slide = 0; p.slideQ = false;
   p.air = true; p.vy = JUMPV; sfx.jump();
+}
+const SLIDE_TIME = 0.75;
+function slide() {
+  const p = G.p;
+  if (G.mode !== 'play' || G.over || p.falling) return;
+  G.jumpBuf = 0;
+  if (p.air) { p.vy = Math.min(p.vy, -16); p.slideQ = true; return; }
+  p.slide = SLIDE_TIME; sfx.slide();
 }
 addEventListener('keydown', e => {
   const k = e.key;
   if (k === 'ArrowLeft' || k === 'a' || k === 'A') { move(-1); e.preventDefault(); }
   else if (k === 'ArrowRight' || k === 'd' || k === 'D') { move(1); e.preventDefault(); }
   else if (k === 'ArrowUp' || k === 'w' || k === 'W' || k === ' ') { if (G.mode === 'play') { jump(); e.preventDefault(); } }
+  else if (k === 'ArrowDown' || k === 's' || k === 'S') { if (G.mode === 'play') { slide(); e.preventDefault(); } }
   else if (k === 'p' || k === 'P' || k === 'Escape') { if (G.mode === 'play' && !G.over && !G.finished) pause(); else if (G.mode === 'pause') resume(); }
 });
 let touch = null;
@@ -488,6 +499,7 @@ cv.addEventListener('pointermove', e => {
   touch.fired = true;
   if (Math.abs(dx) > Math.abs(dy)) move(dx < 0 ? -1 : 1);
   else if (dy < 0) jump();
+  else slide();
 });
 const endTouch = e => { if (touch && touch.id === e.pointerId) touch = null; };
 cv.addEventListener('pointerup', endTouch);
@@ -570,7 +582,15 @@ function update(dt) {
   G.camX += (p.x * 0.55 - G.camX) * Math.min(1, dt * 6);
   if (p.air) {
     p.vy -= GRAV * dt; p.y += p.vy * dt;
-    if (p.y <= 0) { p.y = 0; p.vy = 0; p.air = false; if (G.jumpBuf > 0) { G.jumpBuf = 0; jump(); } }
+    if (p.y <= 0) {
+      p.y = 0; p.vy = 0; p.air = false;
+      if (p.slideQ) { p.slideQ = false; p.slide = SLIDE_TIME; sfx.slide(); }
+      else if (G.jumpBuf > 0) { G.jumpBuf = 0; jump(); }
+    }
+  }
+  if (p.slide > 0) {
+    p.slide = Math.max(0, p.slide - dt);
+    if (Math.random() < dt * 30) { const [sx, sy, s] = proj(p.x + (Math.random() - 0.5) * 0.6, 0.05, PD + 0.2); burst(sx, sy, 'rgba(255,255,255,.75)', 1, s * 0.02); }
   }
   G.jumpBuf = Math.max(0, G.jumpBuf - dt);
   p.inv = Math.max(0, p.inv - dt);
@@ -587,7 +607,7 @@ function update(dt) {
       case 'coin':
         if (o.taken) break;
         if (p.magnet > 0 && dz > -1 && dz < 9) collectCoin(o);
-        else if (Math.abs(dz) < 0.9 && Math.abs(o.x - p.x) < 0.85 && Math.abs(o.y - (p.y + 0.8)) < 0.8) collectCoin(o);
+        else if (Math.abs(dz) < 0.9 && Math.abs(o.x - p.x) < 0.85 && Math.abs(o.y - (p.y + (p.slide > 0 ? 0.45 : 0.8))) < 0.8) collectCoin(o);
         break;
       case 'shield': case 'magnet':
         if (o.taken) break;
@@ -602,6 +622,9 @@ function update(dt) {
         break;
       case 'log':
         if (G.d >= o.p && G.d <= o.p + o.len && p.y < o.h) hitObstacle(o);
+        break;
+      case 'beam':
+        if (G.d >= o.p && G.d <= o.p + o.len && p.y + (p.slide > 0 ? 0.9 : 1.7) > o.y1) hitObstacle(o);
         break;
       case 'pit':
         if (!p.air && G.d >= o.p + 0.35 && G.d <= o.p + o.len - 0.35 && p.x > o.x1 + 0.2 && p.x < o.x2 - 0.2) {
@@ -702,9 +725,9 @@ function drawPits(th) {
     ctx.beginPath(); ctx.moveTo(d[0], d[1]); ctx.lineTo(c[0], c[1]); ctx.stroke();
   }
 }
-function drawBox(x1, x2, h, zn, zf, cF, cT, cS) {
-  const fl = proj(x1, 0, zn), fr = proj(x2, 0, zn), tl = proj(x1, h, zn), tr = proj(x2, h, zn);
-  const ftl = proj(x1, h, zf), ftr = proj(x2, h, zf), fbl = proj(x1, 0, zf), fbr = proj(x2, 0, zf);
+function drawBox(x1, x2, h, zn, zf, cF, cT, cS, y0 = 0) {
+  const fl = proj(x1, y0, zn), fr = proj(x2, y0, zn), tl = proj(x1, h, zn), tr = proj(x2, h, zn);
+  const ftl = proj(x1, h, zf), ftr = proj(x2, h, zf), fbl = proj(x1, y0, zf), fbr = proj(x2, y0, zf);
   if (x1 > G.camX) quad(tl, ftl, fbl, fl, cS);
   if (x2 < G.camX) quad(tr, ftr, fbr, fr, cS);
   if (h < camH) quad(tl, tr, ftr, ftl, cT);
@@ -739,6 +762,30 @@ function drawLog(o, z) {
     ctx.strokeStyle = '#a8733f'; ctx.lineWidth = Math.max(1, h * 0.06);
     ctx.beginPath(); ctx.arc(cx, tl[1] + h / 2, h * 0.26, 0, Math.PI * 2); ctx.stroke();
   }
+}
+function drawBeam(o, z, th) {
+  const zf = z + o.len;
+  strip(-ROADW, ROADW, z - 0.3, zf + 0.3, 'rgba(0,0,0,.16)', 0.01);
+  for (const sx of [-1, 1]) {
+    const a = sx * (ROADW + 0.1), b = sx * (ROADW + 0.6);
+    drawBox(Math.min(a, b), Math.max(a, b), o.y2 + 0.15, z - 0.05, zf + 0.05, th.block[0], th.block[1], th.block[2]);
+  }
+  const { tl, fr } = drawBox(-ROADW - 0.6, ROADW + 0.6, o.y2, z, zf, '#8b5a2b', '#a8733f', '#6e4520', o.y1);
+  const w = fr[0] - tl[0], h = fr[1] - tl[1];
+  // hazard stripes so the beam reads as "duck under"
+  ctx.save(); ctx.beginPath(); ctx.rect(tl[0], tl[1] + h * 0.25, w, h * 0.5); ctx.clip();
+  ctx.fillStyle = '#ffc83d';
+  const n = 14;
+  for (let k = -1; k <= n; k++) {
+    const x = tl[0] + w * k / n;
+    ctx.beginPath(); ctx.moveTo(x, tl[1] + h * 0.75); ctx.lineTo(x + w / n * 0.5, tl[1] + h * 0.75); ctx.lineTo(x + w / n, tl[1] + h * 0.25); ctx.lineTo(x + w / n * 0.5, tl[1] + h * 0.25); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+  // hanging vines
+  ctx.strokeStyle = th.leaf2; ctx.lineWidth = Math.max(1.5, h * 0.12); ctx.lineCap = 'round';
+  ctx.beginPath();
+  for (let k = 1; k < 9; k++) { const x = tl[0] + w * k / 9, len = h * (0.35 + hash(k * 31 + o.p | 0) * 0.5); ctx.moveTo(x, fr[1]); ctx.lineTo(x + Math.sin(G.t * 3 + k) * h * 0.06, fr[1] + len); }
+  ctx.stroke();
 }
 function drawCoin(o, z) {
   const [sx, sy, s] = proj(o.x, o.y, z), r = 0.3 * s;
@@ -850,6 +897,24 @@ function drawPlayer() {
   if (p.falling) ctx.globalAlpha = Math.max(0, 1 - p.falling * 1.15);
   if (blink) ctx.globalAlpha = 0.35;
   const ph = p.run, air = p.air || p.falling > 0;
+  if (p.slide > 0 && !air) {
+    ctx.lineCap = 'round';
+    ctx.fillStyle = '#f4f1ea'; rrect(-30, -14, 20, 13, 5); rrect(10, -14, 20, 13, 5);
+    ctx.strokeStyle = '#2b3a67'; ctx.lineWidth = 17;
+    ctx.beginPath(); ctx.moveTo(-12, -30); ctx.lineTo(-20, -10); ctx.moveTo(12, -30); ctx.lineTo(20, -10); ctx.stroke();
+    ctx.strokeStyle = '#e9b48a'; ctx.lineWidth = 11;
+    ctx.beginPath(); ctx.moveTo(-22, -70); ctx.lineTo(-48, -50); ctx.moveTo(22, -70); ctx.lineTo(48, -50); ctx.stroke();
+    ctx.fillStyle = '#ff7a2f'; rrect(-25, -80, 50, 56, 16);
+    ctx.fillStyle = '#8a5a33'; rrect(-18, -74, 36, 38, 10);
+    ctx.fillStyle = '#b07a45'; rrect(-14, -60, 28, 12, 5);
+    ctx.fillStyle = '#3b2a20'; ellipse(0, -94, 17, 17);
+    const wv = Math.sin(G.t * 16) * 5;
+    ctx.fillStyle = '#1fb5a5'; rrect(-17, -84, 34, 9, 4);
+    ctx.beginPath(); ctx.moveTo(0, -82); ctx.quadraticCurveTo(10 + wv, -105, 6 - wv, -122); ctx.lineTo(0, -120); ctx.quadraticCurveTo(2, -102, -6, -82); ctx.closePath(); ctx.fill();
+    if (p.shield) { ctx.globalAlpha = 0.9; ctx.strokeStyle = 'rgba(120,215,255,.95)'; ctx.lineWidth = 5; ctx.fillStyle = 'rgba(120,215,255,.16)'; ctx.beginPath(); ctx.ellipse(0, -55, 70, 62, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+    ctx.restore();
+    return;
+  }
   const bob = air ? 0 : -Math.abs(Math.sin(ph)) * 5;
   ctx.rotate((p.lane * LANE - p.x) * 0.12);
   ctx.lineCap = 'round';
@@ -902,6 +967,7 @@ function render() {
     switch (o.type) {
       case 'wall': list.push({ z, passed: true, f: () => drawWall(o, z, th) }); break;
       case 'log': list.push({ z, passed: true, f: () => drawLog(o, z) }); break;
+      case 'beam': list.push({ z, passed: true, f: () => drawBeam(o, z, th) }); break;
       case 'coin': if (!o.taken) list.push({ z, passed: true, f: () => drawCoin(o, z) }); break;
       case 'shield': case 'magnet': if (!o.taken) list.push({ z, passed: true, f: () => drawItem(o, z) }); break;
       case 'goal': list.push({ z: z + 0.5, f: () => drawGoal(o, z) }); break;
@@ -1038,7 +1104,7 @@ function start() {
   addEventListener('resize', layout);
   requestAnimationFrame(t => { last = t; frame(t); });
 }
-window.__kakenuke = { G, update, buildStage, startStage, STAGES, LANE, ROADW, move, jump };
+window.__kakenuke = { G, update, buildStage, startStage, STAGES, LANE, ROADW, move, jump, slide };
 const hot = window.claude && window.claude.hot;
 if (hot && hot.ready) hot.ready(start); else start();
 })();
