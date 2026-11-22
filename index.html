@@ -1588,7 +1588,7 @@ function openMenu(){
     const seOpt=addOpt(list,{ic:'🔔',label:`効果音：${Snd.se?'オン':'オフ'}`,onClick:()=>{const v=Snd.toggle('se');seOpt.querySelector('span:nth-child(2) span').textContent=`効果音：${v?'オン':'オフ'}`;}});
     const bgOpt=addOpt(list,{ic:'🎵',label:`BGM：${Snd.bgm?'オン':'オフ'}`,onClick:()=>{const v=Snd.toggle('bgm');bgOpt.querySelector('span:nth-child(2) span').textContent=`BGM：${v?'オン':'オフ'}`;}});
     addOpt(list,{ic:'❓',label:'あそびかた',onClick:()=>openHelp(true)});
-    addOpt(list,{ic:'🏠',label:'タイトルへ戻る',sub:'自動でセーブされています',onClick:()=>{closeSheet();toTitle();}});
+    addOpt(list,{ic:'💾',label:'中断する（セーブしてタイトルへ）',sub:'タイトルの「つづきから」で、いまの場所から再開できます',onClick:()=>{closeSheet();toTitle();}});
     s.appendChild(list);
     addBtns(s,[{label:'閉じる',onClick:closeSheet}]);
   });
@@ -1613,7 +1613,8 @@ function openHelp(fromGame){
 <li>自分が1回動くと、敵も1回動くターン制です。</li>
 <li>歩くとおなかが減ります。0になるとHPが減るので、パンを食べましょう。</li>
 <li>部屋の角をはさんだ斜め移動・斜め攻撃はできません。</li>
-<li>力尽きると、最後のチェックポイント（地下1・6・11…階に着いた時点）からやり直しです。</li></ul>
+<li>力尽きると、最後のチェックポイント（地下1・6・11…階に着いた時点）からやり直しです。</li>
+<li>セーブは1歩ごとに自動で行われます。アプリを閉じても「つづきから」で同じ場所から再開できます。やり直しのために前の状態へ戻ることはできません。</li></ul>
 <h3>周回（やりこみ）</h3><ul>
 <li>ラスボスをたおすと、レベル・ステータス・持ち物を引き継いで、次の周回の地下1階から始められます。</li>
 <li>周回するほど敵が強くなり、深い階の敵が浅い階に出たり、★つきの強い敵が出たりします。</li>
