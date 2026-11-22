@@ -81,6 +81,7 @@ button{font:inherit;color:inherit}
 .act:active{background:var(--stone-3)}
 
 /* シート（持ち物・メニュー） */
+#modal.center{align-items:center}
 #modal{position:absolute;inset:0;z-index:20;display:flex;align-items:flex-end;justify-content:center;
   background:color-mix(in srgb,var(--void) 70%,transparent);padding-left:max(12px,env(safe-area-inset-left,0px));padding-right:max(12px,env(safe-area-inset-right,0px));padding-bottom:max(12px,env(safe-area-inset-bottom,0px))}
 .sheet{width:100%;max-width:520px;max-height:82%;overflow:auto;background:var(--stone);border:1px solid var(--edge);border-radius:12px;
@@ -396,6 +397,159 @@ const TRAPS={
   hunger:{n:'腹ペコの罠',e:'🍽️'},
 };
 
+/* ===================== 音（効果音・BGM。すべてその場で合成） ===================== */
+const Snd=(()=>{
+  const st={se:true,bgm:true};
+  try{const s=JSON.parse(localStorage.getItem('meguri-audio')||'null');if(s){st.se=s.se!==false;st.bgm=s.bgm!==false;}}catch(e){}
+  let ac=null,sfx,bgm,revS,revB,noiseBuf,drone=null,timer=null,nextT=0,stepN=0,bmode='off',chordI=0,lastStep=0;
+  const mtof=m=>440*Math.pow(2,(m-69)/12);
+  function impulse(sec,decay){
+    const len=Math.floor(ac.sampleRate*sec),b=ac.createBuffer(2,len,ac.sampleRate);
+    for(let c=0;c<2;c++){const d=b.getChannelData(c);for(let i=0;i<len;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/len,decay);}
+    return b;
+  }
+  function init(){
+    if(ac){if(ac.state==='suspended')ac.resume().catch(()=>{});return true;}
+    const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return false;
+    try{ac=new AC();}catch(e){return false;}
+    const comp=ac.createDynamicsCompressor();comp.connect(ac.destination);
+    const master=ac.createGain();master.gain.value=.9;master.connect(comp);
+    sfx=ac.createGain();sfx.gain.value=st.se?.6:0;sfx.connect(master);
+    bgm=ac.createGain();bgm.gain.value=st.bgm?.4:0;bgm.connect(master);
+    const ir=impulse(3,2.4);
+    revS=ac.createConvolver();revS.buffer=ir;const rs=ac.createGain();rs.gain.value=.45;revS.connect(rs);rs.connect(sfx);
+    revB=ac.createConvolver();revB.buffer=ir;const rb=ac.createGain();rb.gain.value=.8;revB.connect(rb);rb.connect(bgm);
+    noiseBuf=ac.createBuffer(1,ac.sampleRate*2,ac.sampleRate);
+    const nd=noiseBuf.getChannelData(0);for(let i=0;i<nd.length;i++)nd[i]=Math.random()*2-1;
+    if(ac.state==='suspended')ac.resume().catch(()=>{});
+    return true;
+  }
+  function env(g,t,a,d,v){g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(Math.max(.0002,v),t+a);g.gain.exponentialRampToValueAtTime(.0001,t+a+d);}
+  function tone(f,d,o={}){
+    const t=o.at!=null?o.at:ac.currentTime+(o.t||0);const bus=o.bus||sfx;
+    const osc=ac.createOscillator();osc.type=o.type||'sine';osc.frequency.setValueAtTime(f,t);
+    if(o.to)osc.frequency.exponentialRampToValueAtTime(o.to,t+(o.slide||d));
+    if(o.det)osc.detune.value=o.det;
+    const g=ac.createGain();env(g,t,o.a||.005,d,o.v||.3);
+    if(o.lp){const fl=ac.createBiquadFilter();fl.type='lowpass';fl.frequency.value=o.lp;osc.connect(fl);fl.connect(g);}else osc.connect(g);
+    g.connect(bus);
+    if(o.rev){const s=ac.createGain();s.gain.value=o.rev;g.connect(s);s.connect(bus===bgm?revB:revS);}
+    osc.start(t);osc.stop(t+(o.a||.005)+d+.05);
+  }
+  function noise(d,o={}){
+    const t=o.at!=null?o.at:ac.currentTime+(o.t||0);const bus=o.bus||sfx;
+    const src=ac.createBufferSource();src.buffer=noiseBuf;
+    const fl=ac.createBiquadFilter();fl.type=o.ft||'bandpass';fl.frequency.setValueAtTime(o.f||1000,t);
+    if(o.to)fl.frequency.exponentialRampToValueAtTime(o.to,t+d);fl.Q.value=o.q||1;
+    const g=ac.createGain();env(g,t,o.a||.003,d,o.v||.3);
+    src.connect(fl);fl.connect(g);g.connect(bus);
+    if(o.rev){const s=ac.createGain();s.gain.value=o.rev;g.connect(s);s.connect(bus===bgm?revB:revS);}
+    src.start(t,Math.random()*1.5);src.stop(t+d+.1);
+  }
+  const arp=(notes,gap,o)=>notes.forEach((f,i)=>tone(f,o.d||.12,Object.assign({},o,{t:i*gap})));
+  const SFX={
+    step:()=>{const n=performance.now();if(n-lastStep<70)return;lastStep=n;noise(.05,{ft:'lowpass',f:380,v:.07});},
+    bump:()=>tone(85,.07,{type:'square',v:.06,lp:350}),
+    swing:()=>noise(.13,{f:2600,to:700,q:.8,v:.16}),
+    hit:()=>{noise(.1,{f:2400,to:800,q:.8,v:.14});noise(.08,{ft:'lowpass',f:900,v:.4,t:.02});tone(170,.11,{to:60,type:'triangle',v:.35,t:.02});},
+    miss:()=>noise(.16,{f:3200,to:1300,q:1.2,v:.12}),
+    hurt:()=>{tone(230,.18,{type:'square',to:85,v:.14,lp:1100});noise(.1,{ft:'lowpass',f:600,v:.35});},
+    kill:()=>{arp([523,392,262],.06,{type:'square',v:.08,lp:2500,d:.07});noise(.25,{ft:'lowpass',f:1600,to:200,v:.18,t:.15});},
+    bossKill:()=>{noise(1.2,{ft:'lowpass',f:2200,to:120,v:.5,rev:.6});tone(65,1.2,{type:'sawtooth',to:30,v:.3,lp:400});arp([392,523,659,784],.12,{type:'triangle',v:.16,rev:.4,d:.3,t:.6});},
+    levelup:()=>arp([523,659,784,1047,1319],.075,{type:'triangle',v:.2,rev:.35,d:.18}),
+    pickup:()=>{tone(880,.06,{type:'triangle',v:.16});tone(1320,.12,{type:'triangle',v:.16,t:.06});},
+    heal:()=>{tone(420,.5,{to:900,slide:.4,v:.12,rev:.5});arp([1047,1319,1568],.08,{v:.06,rev:.6,d:.3,t:.15});},
+    eat:()=>{noise(.06,{f:900,q:2,v:.22});noise(.06,{f:750,q:2,v:.2,t:.13});noise(.07,{f:850,q:2,v:.18,t:.26});},
+    scroll:()=>{noise(.3,{f:4500,to:7500,q:3,v:.08});arp([784,1047,1319,1568],.07,{v:.07,rev:.6,d:.35,t:.1});},
+    thunder:()=>{noise(.7,{ft:'lowpass',f:4000,to:150,v:.6,rev:.4});tone(60,.6,{type:'sawtooth',to:28,v:.25,lp:400});},
+    zap:()=>tone(1300,.28,{type:'sawtooth',to:180,v:.1,lp:3200,rev:.3}),
+    throw:()=>noise(.2,{f:1400,to:3600,q:1,v:.14}),
+    trap:()=>{tone(880,.09,{type:'square',v:.1,lp:3000});tone(660,.09,{type:'square',v:.1,lp:3000,t:.11});tone(880,.09,{type:'square',v:.1,lp:3000,t:.22});},
+    stairs:()=>{[392,330,262,196].forEach((f,i)=>{noise(.05,{ft:'lowpass',f:500,v:.12,t:i*.16});tone(f,.2,{type:'triangle',v:.1,rev:.5,t:i*.16});});},
+    summon:()=>tone(110,.5,{type:'sawtooth',to:240,v:.14,lp:900,rev:.5}),
+    fire:()=>noise(.55,{ft:'lowpass',f:1400,to:250,v:.45,rev:.2}),
+    arrow:()=>{noise(.1,{f:5000,to:2000,q:4,v:.14});tone(1900,.03,{type:'square',v:.04,t:.09});},
+    sleep:()=>tone(620,.6,{to:280,v:.1,rev:.5}),
+    equip:()=>{tone(1500,.08,{type:'square',v:.06,lp:4000});tone(2250,.16,{type:'triangle',v:.08,t:.03,rev:.3});},
+    ui:()=>tone(700,.03,{type:'triangle',v:.06}),
+    boss:()=>{tone(55,1.6,{type:'sawtooth',lp:280,v:.4,rev:.7});noise(1.4,{ft:'lowpass',f:300,v:.3});},
+    death:()=>arp([392,311,262,196,147],.32,{type:'triangle',v:.16,rev:.6,d:.5}),
+    victory:()=>{arp([523,523,523,698,880,784,1047],.14,{type:'square',v:.07,lp:3000,d:.16});arp([262,262,262,349,440,392,523],.14,{type:'triangle',v:.12,d:.16});},
+  };
+  function play(name){if(!st.se||!ac||ac.state!=='running')return;try{SFX[name]&&SFX[name]();}catch(e){}}
+
+  /* BGM：薄暗い迷宮の環境音。低いうなり＋まばらな残響の音粒＋しずく。ボス階は鼓動のような太鼓 */
+  const CHORDS=[[45,52],[41,48],[43,50],[40,47]];
+  const SCALE=[0,3,5,7,8,10];
+  function startDrone(){
+    if(drone)return;
+    const g=ac.createGain();g.gain.value=0;g.connect(bgm);
+    const fl=ac.createBiquadFilter();fl.type='lowpass';fl.frequency.value=260;fl.Q.value=.6;fl.connect(g);
+    const lfo=ac.createOscillator();lfo.frequency.value=.06;const lg=ac.createGain();lg.gain.value=110;lfo.connect(lg);lg.connect(fl.frequency);lfo.start();
+    const o1=ac.createOscillator(),o2=ac.createOscillator(),o3=ac.createOscillator();
+    o1.type='sawtooth';o2.type='sawtooth';o2.detune.value=9;o3.type='sine';
+    [o1,o2,o3].forEach(o=>{o.connect(fl);o.start();});
+    drone={g,fl,o1,o2,o3,lfo};
+    setChord(0,ac.currentTime);
+    g.gain.setTargetAtTime(.07,ac.currentTime,1.5);
+  }
+  function setChord(i,t){
+    if(!drone)return;const [a,b]=CHORDS[i%CHORDS.length];
+    drone.o1.frequency.setTargetAtTime(mtof(a),t,1.2);drone.o2.frequency.setTargetAtTime(mtof(b),t,1.2);drone.o3.frequency.setTargetAtTime(mtof(a-12),t,1.2);
+  }
+  function stopDrone(){
+    if(!drone)return;const d=drone;drone=null;
+    d.g.gain.setTargetAtTime(0,ac.currentTime,.6);
+    setTimeout(()=>{try{[d.o1,d.o2,d.o3,d.lfo].forEach(o=>o.stop());}catch(e){}},3000);
+  }
+  function schedStep(t){
+    const boss=bmode==='boss';
+    if(stepN%(boss?16:24)===0){chordI=(chordI+1)%CHORDS.length;setChord(boss?(chordI%2?3:0):chordI,t);}
+    const root=CHORDS[boss?(chordI%2?3:0):chordI][0];
+    if(boss){
+      const s=stepN%8;
+      if(s===0||s===3||s===6)tone(68,.3,{at:t,to:38,type:'sine',v:s===0?.5:.32,bus:bgm});
+      if(s===0||s===4)noise(.08,{at:t,ft:'lowpass',f:220,v:.12,bus:bgm});
+      if(stepN%2===0)tone(mtof(root),.22,{at:t,type:'sawtooth',v:.05,lp:520,bus:bgm});
+      if(Math.random()<.14){const iv=[1,6,7,13][Math.floor(Math.random()*4)];tone(mtof(root+12+iv),.9,{at:t,type:'triangle',v:.035,rev:.8,bus:bgm});}
+    }else{
+      if(Math.random()<.26){
+        const n=root+12+SCALE[Math.floor(Math.random()*SCALE.length)]+(Math.random()<.3?12:0);
+        tone(mtof(n),1.4,{at:t,type:'triangle',v:.045,a:.01,rev:.9,bus:bgm});
+      }
+      if(Math.random()<.035){const f=1500+Math.random()*900;tone(f,.09,{at:t,to:f*.45,v:.03,rev:.9,bus:bgm});}
+    }
+    stepN++;
+  }
+  function tick(){
+    if(!ac||bmode==='off')return;
+    const dur=bmode==='boss'?.3:.45;
+    if(nextT<ac.currentTime)nextT=ac.currentTime+.05;
+    while(nextT<ac.currentTime+.7){schedStep(nextT);nextT+=dur;}
+  }
+  function music(m){
+    if(!init())return;
+    if(!st.bgm)m='off';
+    if(m===bmode)return;
+    bmode=m;
+    if(m==='off'){stopDrone();clearInterval(timer);timer=null;return;}
+    startDrone();
+    if(!timer){nextT=ac.currentTime+.1;timer=setInterval(tick,180);}
+  }
+  let want='off';
+  function setMusic(m){want=m;music(m);}
+  function saveSt(){try{localStorage.setItem('meguri-audio',JSON.stringify(st));}catch(e){}}
+  function toggle(k){
+    st[k]=!st[k];saveSt();
+    if(ac){if(k==='se')sfx.gain.setTargetAtTime(st.se?.6:0,ac.currentTime,.05);
+      if(k==='bgm'){bgm.gain.setTargetAtTime(st.bgm?.4:0,ac.currentTime,.1);bmode='?';music(want);}}
+    return st[k];
+  }
+  document.addEventListener('visibilitychange',()=>{if(!ac)return;if(document.hidden)ac.suspend().catch(()=>{});else ac.resume().catch(()=>{});});
+  return {init,play,setMusic,toggle,get se(){return st.se;},get bgm(){return st.bgm;},_test:()=>{init();const bad=[];for(const k in SFX){try{SFX[k]();}catch(e){bad.push(k+':'+e.message);}}return {state:ac.state,bad,steps:stepN,mode:bmode};}};
+})();
+const musicFor=()=>Snd.setMusic(G&&isBossFloor(G.floor)&&G.mons.some(m=>m.boss)?'boss':'normal');
+
 /* ===================== 状態 ===================== */
 let G=null;           // ゲーム状態（セーブ対象）
 let CP=null;          // チェックポイント（JSON文字列）
@@ -694,21 +848,22 @@ const calcDmg=(atk,def)=>Math.max(1,Math.round((atk-def*.5)*vary()));
 function playerAttack(m){
   if(m.asleep)m.asleep=false;
   m.aware=true;
-  if(!chance(.95)){msg(`${m.n}に攻撃したが外れた`);fxText(m.x,m.y,'MISS','#a29d93');return;}
+  if(!chance(.95)){msg(`${m.n}に攻撃したが外れた`);fxText(m.x,m.y,'MISS','#a29d93');Snd.play('miss');return;}
   const dmg=calcDmg(pAtk(),m.def);
-  m.hp-=dmg;fxFlash(m.x,m.y,'#ffffff');fxText(m.x,m.y,String(dmg),'#ffe08a');
+  m.hp-=dmg;fxFlash(m.x,m.y,'#ffffff');fxText(m.x,m.y,String(dmg),'#ffe08a');Snd.play('hit');
   msg(`${m.n}に${dmg}のダメージ`);
   if(m.hp<=0)killMon(m);
 }
 function damageMon(m,dmg,how){
   m.hp-=dmg;m.aware=true;if(m.asleep)m.asleep=false;
-  fxFlash(m.x,m.y,'#ffffff');fxText(m.x,m.y,String(dmg),'#ffe08a');
+  fxFlash(m.x,m.y,'#ffffff');fxText(m.x,m.y,String(dmg),'#ffe08a');Snd.play('hit');
   msg(`${m.n}に${how?how+'で':''}${dmg}のダメージ`);
   if(m.hp<=0)killMon(m);
 }
 function killMon(m){
   m.hp=0;G.mons=G.mons.filter(x=>x!==m);
   G.stats.kills++;
+  Snd.play(m.boss?'bossKill':'kill');
   msg(`${m.n}をたおした！（経験値${m.exp}）`,'c-good');
   if(m.item){dropNear(m.item,m.x,m.y);m.item=null;}
   else if(!m.boss&&chance(.08))dropNear(makeItem(randomItemKey()),m.x,m.y);
@@ -719,13 +874,14 @@ function killMon(m){
       G.cleared=true;G.stats.clears++;
       msg('奈落の竜をたおした！迷宮に光が差しこむ…','c-sys');
       interrupt=true;
+      Snd.setMusic('off');setTimeout(()=>Snd.play('victory'),900);
       setTimeout(showVictory,700);
     }else{
       dropNear(makeItem('bigherb'),m.x,m.y);
       dropNear(makeItem(chance(.5)?'weapon':'shield'),m.x,m.y);
       G.stairs={x:m.x,y:m.y};
       const it=itemAt(m.x,m.y);if(it)dropNear(G.items.splice(G.items.indexOf(it),1)[0],m.x,m.y);
-      msg('階段が現れた！','c-sys');
+      msg('階段が現れた！','c-sys');musicFor();
     }
   }
 }
@@ -733,18 +889,18 @@ function gainExp(n){
   const p=G.p;p.exp+=n;
   while(p.exp>=expNeed(p.lv)){
     p.lv++;const up=rint(4,6);p.maxHp+=up;p.hp+=up;
-    msg(`レベル${p.lv}に上がった！（最大HP+${up}）`,'c-good');fxText(p.x,p.y,'LV UP','#7fd18b');
+    msg(`レベル${p.lv}に上がった！（最大HP+${up}）`,'c-good');Snd.play('levelup');fxText(p.x,p.y,'LV UP','#7fd18b');
   }
 }
 function hurtPlayer(dmg,cause){
   const p=G.p;p.hp-=dmg;interrupt=true;
-  fxFlash(p.x,p.y,'#ec6a5c');fxText(p.x,p.y,String(dmg),'#ff8a7a');
+  fxFlash(p.x,p.y,'#ec6a5c');fxText(p.x,p.y,String(dmg),'#ff8a7a');Snd.play('hurt');
   if(p.hp<=0){p.hp=0;die(cause);}
 }
 function die(cause){
   if(G.dead)return;
   G.dead=true;G.cause=cause;
-  msg(`${cause}によって力尽きた…`,'c-dmg');
+  msg(`${cause}によって力尽きた…`,'c-dmg');Snd.setMusic('off');setTimeout(()=>Snd.play('death'),250);
   interrupt=true;
   setTimeout(showDeath,500);
 }
@@ -806,17 +962,17 @@ function monAttack(m){
   if(m.ab.includes('thief')&&!m.fled){
     const cand=G.inv.filter(i=>!isEquipped(i));
     if(cand.length&&chance(.6)){
-      const it=pick(cand);removeInv(it);m.item=it;m.fled=true;
+      const it=pick(cand);removeInv(it);m.item=it;m.fled=true;Snd.play('throw');
       msg(`${m.n}に${itemName(it)}を盗まれた！`,'c-dmg');interrupt=true;warpMon(m);return;
     }
   }
-  if(!chance(m.boss?.92:.88)){msg(`${m.n}の攻撃は外れた`);return;}
+  if(!chance(m.boss?.92:.88)){msg(`${m.n}の攻撃は外れた`);Snd.play('miss');return;}
   const dmg=calcDmg(m.atk,pDef());
   msg(`${m.n}の攻撃！${dmg}のダメージを受けた`,'c-dmg');
   hurtPlayer(dmg,m.n);
   if(G.dead)return;
   if(m.ab.includes('drain')&&chance(.3)&&p.str>1){p.str--;msg('ちからが1下がった…','c-dmg');}
-  if(m.ab.includes('sleep')&&chance(.15)&&p.sleep===0&&!(p.sleepImm>0)){p.sleep=3;msg('眠ってしまった…','c-dmg');}
+  if(m.ab.includes('sleep')&&chance(.15)&&p.sleep===0&&!(p.sleepImm>0)){p.sleep=3;msg('眠ってしまった…','c-dmg');Snd.play('sleep');}
   if(m.ab.includes('vamp')){m.hp=Math.min(m.maxHp,m.hp+dmg);}
 }
 function trySpecial(m,sees){
@@ -825,16 +981,16 @@ function trySpecial(m,sees){
     if(m.ab.includes('breath')&&al.n<=7&&chance(al.n===1?.15:.3)){
       fxLine(al.cells.concat([[G.p.x,G.p.y]]),'#ff8a3c');
       const dmg=Math.max(1,Math.round(m.atk*vary()));
-      msg(`${m.n}は炎を吐いた！${dmg}のダメージ`,'c-dmg');hurtPlayer(dmg,m.n+'の炎');return true;
+      msg(`${m.n}は炎を吐いた！${dmg}のダメージ`,'c-dmg');Snd.play('fire');hurtPlayer(dmg,m.n+'の炎');return true;
     }
     if(m.ab.includes('archer')&&al.n>=2&&al.n<=8&&chance(.5)){
-      fxLine(al.cells.concat([[G.p.x,G.p.y]]),'#e7e3d8');
+      fxLine(al.cells.concat([[G.p.x,G.p.y]]),'#e7e3d8');Snd.play('arrow');
       if(chance(.85)){const dmg=calcDmg(m.atk,pDef());msg(`${m.n}の矢が当たった！${dmg}のダメージ`,'c-dmg');hurtPlayer(dmg,m.n+'の矢');}
       else msg(`${m.n}の矢は外れた`);
       return true;
     }
     if(m.ab.includes('caster')&&al.n>=2&&al.n<=7&&chance(.35)){
-      fxLine(al.cells.concat([[G.p.x,G.p.y]]),'#b98cf0');
+      fxLine(al.cells.concat([[G.p.x,G.p.y]]),'#b98cf0');Snd.play('zap');
       const dmg=Math.max(1,Math.round(m.atk*.8*vary()));
       msg(`${m.n}の魔法！${dmg}のダメージ`,'c-dmg');hurtPlayer(dmg,m.n+'の魔法');return true;
     }
@@ -845,7 +1001,7 @@ function trySpecial(m,sees){
       const spots=DIR8.map(([dx,dy])=>[m.x+dx,m.y+dy]).filter(([x,y])=>passable(x,y)&&!monOccupied(x,y));
       if(spots.length){
         const [x,y]=pick(spots);const mm=makeMon(m.minion,x,y,{minion:true,elite:false});mm.minionOf=m.id;mm.aware=true;
-        G.mons.push(mm);msg(`${m.n}は手下の${mm.n}を呼んだ！`,'c-dmg');return true;
+        G.mons.push(mm);msg(`${m.n}は手下の${mm.n}を呼んだ！`,'c-dmg');Snd.play('summon');return true;
       }
     }
   }
@@ -859,7 +1015,7 @@ function monAction(m,ctx){
     if(cheb(m,p)<=1||(VIS[idx(m.x,m.y)]&&chance(.12)))m.asleep=false;else return;
   }
   const sees=monSees(m);
-  if(sees&&!m.fled){m.aware=true;m.last={x:p.x,y:p.y};}
+  if(sees&&!m.fled){if(m.boss&&!m.aware){Snd.play('boss');msg(`${m.n}が立ちはだかった！`,'c-dmg');m.aware=true;musicFor();}m.aware=true;m.last={x:p.x,y:p.y};}
   if(m.ab.includes('erratic')&&chance(.4)){randomStep(m);return;}
   if(m.fled){
     if(cheb(m,p)<=1&&chance(.7)){ // 逃げる
@@ -966,10 +1122,10 @@ function tryMove(dx,dy){
   const m=monAt(nx,ny);
   if(m&&(G.tiles[idx(nx,ny)]!==WALL||m.ab.includes('phase'))){
     if(G.tiles[idx(nx,ny)]!==WALL&&!diagOK(p.x,p.y,dx,dy))return false;
-    playerAttack(m);return true;
+    Snd.play('swing');playerAttack(m);return true;
   }
-  if(!passable(nx,ny)||!diagOK(p.x,p.y,dx,dy)){requestDraw();return false;}
-  p.x=nx;p.y=ny;p.wf=p.wf?0:1;onStep();
+  if(!passable(nx,ny)||!diagOK(p.x,p.y,dx,dy)){Snd.play('bump');requestDraw();return false;}
+  p.x=nx;p.y=ny;p.wf=p.wf?0:1;Snd.play('step');onStep();
   return true;
 }
 function onStep(){
@@ -986,16 +1142,16 @@ let wasInRoom=false;
 function pickUp(it){
   if(it.k==='stone'){
     const st=G.inv.find(i=>i.k==='stone');
-    if(st){st.n+=it.n;G.items.splice(G.items.indexOf(it),1);msg(`${ITEMS.stone.n}を${it.n}個拾った`);return true;}
+    if(st){st.n+=it.n;G.items.splice(G.items.indexOf(it),1);msg(`${ITEMS.stone.n}を${it.n}個拾った`);Snd.play('pickup');return true;}
   }
   if(G.inv.length>=INV_MAX){msg(`持ち物がいっぱいで${itemName(it)}を拾えない`,'c-info');return false;}
   G.items.splice(G.items.indexOf(it),1);delete it.x;delete it.y;delete it.seen;
-  G.inv.push(it);msg(`${itemName(it)}を拾った`);
+  G.inv.push(it);msg(`${itemName(it)}を拾った`);Snd.play('pickup');
   return true;
 }
 function triggerTrap(tr){
   const p=G.p,t=TRAPS[tr.t];tr.found=true;
-  msg(`${t.n}を踏んでしまった！`,'c-dmg');
+  msg(`${t.n}を踏んでしまった！`,'c-dmg');Snd.play('trap');
   if(tr.t==='mine'){
     const dmg=Math.floor(p.hp/2);if(dmg>0)hurtPlayer(dmg,'地雷');
     fxFlash(p.x,p.y,'#ff8a3c');
@@ -1022,6 +1178,7 @@ function descend(fell){
   if(G.floor%BOSS_EVERY===1&&G.floor>1)msg('ここがチェックポイントになった。','c-sys');
   if(G.floor===FLOORS)msg('迷宮の最深部…奈落の竜が待っている。','c-sys');
   showBanner(`地下${G.floor}階`+(isBossFloor(G.floor)?'　ボスフロア':''),1400);
+  Snd.play('stairs');musicFor();
   updateStatus();requestDraw();save();
 }
 function nextCycle(){
@@ -1032,6 +1189,7 @@ function nextCycle(){
   saveCheckpoint();
   msg(`${G.cycle}周目の迷宮がはじまった。敵が強くなっている…`,'c-sys');
   showBanner(`${G.cycle}周目　地下1階`,1600);
+  Snd.play('stairs');musicFor();
   updateStatus();requestDraw();save();
 }
 
@@ -1076,6 +1234,7 @@ function useItem(it){
       eq.plus++;msg(`${itemName(eq)}になった！`,'c-good');break;}
     default:return false;
   }
+  Snd.play({herb:'heal',food:'eat',scroll:it.k==='s_thunder'?'thunder':'scroll'}[cat]||'heal');
   removeInv(it);
   return true;
 }
@@ -1098,7 +1257,7 @@ function throwItem(it,dx,dy){
   if(it.k==='stone'&&it.n>1){it.n--;thrown=makeItem('stone',{n:1});}
   else removeInv(it);
   const r=shoot(dx,dy,10);
-  fxLine(r.path,'#d9b063');
+  fxLine(r.path,'#d9b063');Snd.play('throw');
   const name=ITEMS[thrown.k].n;
   if(r.m){
     const m=r.m;
@@ -1114,8 +1273,8 @@ function throwItem(it,dx,dy){
 }
 function zapStaff(it,dx,dy){
   const p=G.p;p.dir=[dx,dy];
-  if(it.ch<=0){msg('杖を振ったが何も起きなかった');return;}
-  it.ch--;
+  if(it.ch<=0){msg('杖を振ったが何も起きなかった');Snd.play('bump');return;}
+  it.ch--;Snd.play('zap');
   const r=shoot(dx,dy,10);
   const col={w_bolt:'#ffe08a',w_knock:'#8db4ef',w_slow:'#b98cf0',w_swap:'#7fd18b'}[it.k];
   fxLine(r.path,col);
@@ -1293,8 +1452,10 @@ function hideBanner(){clearTimeout(bannerTimer);$('banner').hidden=true;}
 
 /* シート */
 let sheetReturn='play';
-function openSheet(build){
+let sheetOpenAt=0;
+function openSheet(build,center){
   const s=$('sheet');s.innerHTML='';build(s);
+  sheetOpenAt=performance.now();$('modal').classList.toggle('center',!!center);
   $('modal').hidden=false;if(mode!=='modal')sheetReturn=mode;mode='modal';stopHold();
   const f=s.querySelector('button:not([disabled])');if(f)f.focus({preventScroll:true});
 }
@@ -1342,7 +1503,7 @@ function openItemMenu(it){
       const eq=isEquipped(it);
       addOpt(list,{ic:'🧤',label:eq?'外す':'装備する',onClick:act(()=>{
         if(eq){if(cat==='weapon')G.p.wId=0;else G.p.sId=0;msg(`${itemName(it)}を外した`);}
-        else{if(cat==='weapon')G.p.wId=it.uid;else G.p.sId=it.uid;msg(`${itemName(it)}を装備した`,'c-good');}
+        else{if(cat==='weapon')G.p.wId=it.uid;else G.p.sId=it.uid;msg(`${itemName(it)}を装備した`,'c-good');Snd.play('equip');}
         endTurn();})});
     }
     addOpt(list,{ic:'🎯',label:'投げる',sub:it.k==='stone'?'1個投げる':'方向を選んで投げる',onClick:act(()=>askDir('投げる方向を選んでください',(dx,dy)=>{throwItem(it,dx,dy);endTurn();}))});
@@ -1362,10 +1523,10 @@ function endDir(){
 }
 function askStairs(){
   openSheet(s=>{
-    s.appendChild(el('h2',null,'階段がある'));
-    s.appendChild(el('p','desc',isBossFloor(G.floor+1)?`次は地下${G.floor+1}階。ボスが待ち構えている。準備はいい？`:`地下${G.floor+1}階へ降りますか？`));
-    addBtns(s,[{label:'降りる',primary:true,onClick:()=>{closeSheet();descend(false);}},{label:'まだ降りない',onClick:closeSheet}]);
-  });
+    s.appendChild(el('h2',null,'階段を見つけた'));
+    s.appendChild(el('p','desc',isBossFloor(G.floor+1)?`地下${G.floor+1}階へ降りますか？　次の階ではボスが待ち構えています。`:`地下${G.floor+1}階へ降りますか？`));
+    addBtns(s,[{label:'降りない',onClick:()=>{closeSheet();msg('あとで「足元」ボタンから降りられます。','c-info');}},{label:'降りる',primary:true,onClick:()=>{closeSheet();descend(false);}}]);
+  },true);
 }
 function footAction(){
   if(mode!=='play'||G.dead)return;
@@ -1384,7 +1545,7 @@ function attackFront(){
   else{
     const tr=inb(nx,ny)&&trapAt(nx,ny);
     if(tr&&!tr.found){tr.found=true;msg(`${TRAPS[tr.t].n}を見つけた！`,'c-info');}
-    else msg('空振りした');
+    else{msg('空振りした');Snd.play('swing');}
   }
   endTurn();
 }
@@ -1417,6 +1578,8 @@ function openMenu(){
     kv('チェックポイント',`地下${cpFloor()}階`);
     s.appendChild(dl);
     const list=el('div','opts');
+    const seOpt=addOpt(list,{ic:'🔔',label:`効果音：${Snd.se?'オン':'オフ'}`,onClick:()=>{const v=Snd.toggle('se');seOpt.querySelector('span:nth-child(2) span').textContent=`効果音：${v?'オン':'オフ'}`;}});
+    const bgOpt=addOpt(list,{ic:'🎵',label:`BGM：${Snd.bgm?'オン':'オフ'}`,onClick:()=>{const v=Snd.toggle('bgm');bgOpt.querySelector('span:nth-child(2) span').textContent=`BGM：${v?'オン':'オフ'}`;}});
     addOpt(list,{ic:'❓',label:'あそびかた',onClick:()=>openHelp(true)});
     addOpt(list,{ic:'🏠',label:'タイトルへ戻る',sub:'自動でセーブされています',onClick:()=>{closeSheet();toTitle();}});
     s.appendChild(list);
@@ -1437,7 +1600,8 @@ function openHelp(fromGame){
 <li>道具：持ち物を使う・装備する・投げる。</li>
 <li>足元：落ちている道具を拾う、階段を降りる。</li>
 <li>地図：歩いた場所の地図を重ねて表示。</li>
-<li>キーボード：矢印キー・テンキー・hjklyubn で移動、. 足踏み、f 攻撃、i 道具、g 足元、m 地図、Esc 閉じる。</li></ul>
+<li>キーボード：矢印キー・テンキー・hjklyubn で移動、. 足踏み、f 攻撃、i 道具、g 足元、m 地図、Esc 閉じる。</li>
+<li>効果音とBGMは「メニュー」からオン・オフできます。iPhoneはマナーモードだと音が出ません。</li></ul>
 <h3>ルール</h3><ul>
 <li>自分が1回動くと、敵も1回動くターン制です。</li>
 <li>歩くとおなかが減ります。0になるとHPが減るので、パンを食べましょう。</li>
@@ -1480,7 +1644,7 @@ function restoreCheckpoint(){
   G.stats=st;G.stats.deaths++;G.dead=false;G.cleared=false;
   G.log=[];msg(`地下${G.floor}階からやり直す。`,'c-sys');
   wasInRoom=G.roomOf[idx(G.p.x,G.p.y)]>=0;
-  computeVis();updateStatus();requestDraw();save();mode='play';
+  computeVis();updateStatus();requestDraw();save();mode='play';musicFor();
 }
 function loadSaved(){
   try{
@@ -1501,13 +1665,14 @@ function showTitle(){
   if(G&&!G.dead){$('t-note').textContent=`${G.cycle}周目・地下${G.floor}階・レベル${G.p.lv}`;}
   ($('t-continue').hidden?$('t-new'):$('t-continue')).focus({preventScroll:true});
 }
-function toTitle(){save();showTitle();}
+function toTitle(){save();Snd.setMusic('off');showTitle();}
 function enterGame(){
   $('title').hidden=true;mode='play';
   wasInRoom=G.roomOf[idx(G.p.x,G.p.y)]>=0;
   computeVis();updateStatus();renderLog();resize();
   if(G.dead)showDeath();else if(G.cleared)showVictory();
   else showBanner(`${G.cycle}周目　地下${G.floor}階`,1200);
+  if(!G.dead&&!G.cleared)musicFor();
 }
 $('t-continue').addEventListener('click',()=>{if(!G&&!loadSaved()){$('t-note').textContent='セーブデータを読みこめませんでした';return;}enterGame();});
 $('t-new').addEventListener('click',()=>{
@@ -1530,7 +1695,8 @@ function haptic(){
     hapLabel.click();
   }catch(e){}
 }
-document.addEventListener('pointerdown',e=>{const b=e.target.closest&&e.target.closest('button');if(b&&!b.disabled)haptic();},true);
+document.addEventListener('pointerdown',e=>{Snd.init();const b=e.target.closest&&e.target.closest('button');if(b&&!b.disabled){haptic();if(!b.closest('#dpad'))Snd.play('ui');}},true);
+document.addEventListener('keydown',()=>Snd.init(),true);
 let holdTimer=null,holdDir=null;
 function stopHold(){clearTimeout(holdTimer);holdTimer=null;holdDir=null;}
 function doStep(dx,dy){
@@ -1575,6 +1741,7 @@ $('a-foot').addEventListener('click',footAction);
 $('a-map').addEventListener('click',()=>{if(mode!=='play')return;showMap=!showMap;requestDraw();});
 $('a-log').addEventListener('click',openLog);
 $('a-menu').addEventListener('click',openMenu);
+$('modal').addEventListener('click',e=>{if(performance.now()-sheetOpenAt<450){e.stopImmediatePropagation();e.preventDefault();}},true);
 $('modal').addEventListener('click',e=>{if(e.target===$('modal')&&mode==='modal'&&!(G&&(G.dead||G.cleared))){const back=sheetReturn==='title';closeSheet();if(back)showTitle();}});
 const KEYDIR={ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0],
   k:[0,-1],j:[0,1],h:[-1,0],l:[1,0],y:[-1,-1],u:[1,-1],b:[-1,1],n:[1,1],
@@ -1608,7 +1775,7 @@ function start(data){
   showTitle();
 }
 window.claude?.hot?.snapshot?.(()=>({G,CP,mode}));
-window.__meguri={get G(){return G;},set G(v){G=v;},step:doStep,descend,useItem,nextCycle,genFloor,computeVis,endTurn,expNeed,pAtk,pDef,depth,makeItem,
+window.__meguri={snd:Snd,get G(){return G;},set G(v){G=v;},step:doStep,descend,useItem,nextCycle,genFloor,computeVis,endTurn,expNeed,pAtk,pDef,depth,makeItem,
   closeSheet,get mode(){return mode;},set mode(v){mode=v;}};
 window.claude?.hot?.ready?window.claude.hot.ready(start):start(window.claude?.hot?.data??{});
 })();
