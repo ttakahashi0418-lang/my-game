@@ -1407,21 +1407,100 @@ function drawStairs(X,Y){
   ctx.fillStyle=COL.stairs;
   for(let k=0;k<4;k++){const w=TS*(.66-k*.13);ctx.fillRect(X+TS*.17,Y+TS*(.2+k*.16),w,TS*.09);}
 }
+/* 地図用の小さなドット絵アイコン */
+const ICON_PAL={k:'#171923',b:'#9a6430',B:'#6b4220',g:'#f0c45e',G:'#b8862f',s:'#e9dcc0',o:'#e9a75a',w:'#fff6dc',r:'#ec6a5c',R:'#9e3a32'};
+const ICONS={
+  chest:[
+    "..kkkkkkkk..",
+    ".kbbbbbbbbk.",
+    "kbBbbbbbbBbk",
+    "kggggggggggk",
+    "kgGGGkkGGGgk",
+    "kbbbbkgkbbbk",
+    "kbbbbkkkbbbk",
+    "kBbbbbbbbbBk",
+    "kggggggggggk",
+    ".kkkkkkkkkk.",
+  ],
+  stairs:[
+    "kkkkkkkkkkkk",
+    "kggggggggggk",
+    "kkkkkkkkkkkk",
+    "kgggggggg.kk",
+    "kkkkkkkkk.kk",
+    "kgggggg...kk",
+    "kkkkkkk...kk",
+    "kgggg.....kk",
+    "kkkkk.....kk",
+    "kgg.......kk",
+    "kkk.......kk",
+    "kkkkkkkkkkkk",
+  ],
+  trap:[
+    ".....kk.....",
+    "....kook....",
+    "....kook....",
+    "...kookoo k.",
+    "...kokkok...",
+    "..kookkook..",
+    "..koookooo k",
+    ".kooookoook.",
+    ".koooooooook",
+    "kooookkooook",
+    "kkkkkkkkkkkk",
+  ].map(r=>r.replace(/ /g,'.').padEnd(12,'.').slice(0,12)),
+  enemy:[
+    "...kkkkkk...",
+    "..krrrrrrk..",
+    ".krrrrrrrrk.",
+    "krrwkrrwkrrk",
+    "krrkkrrkkrrk",
+    "krrrrrrrrrrk",
+    "krrrRRRRrrrk",
+    ".krrrrrrrrk.",
+    "..krrrrrrk..",
+    "...kkkkkk...",
+  ],
+};
+const iconCache={};
+function iconImg(name){
+  if(iconCache[name])return iconCache[name];
+  const rows=name==='hero'?HERO.down:ICONS[name],pal=name==='hero'?HERO_PAL:ICON_PAL;
+  const w=rows[0].length,h=rows.length,c=document.createElement('canvas');c.width=w;c.height=h;const g=c.getContext('2d');
+  rows.forEach((row,y)=>{for(let x=0;x<w;x++){const ch=row[x];if(ch==='.'||!pal[ch])continue;g.fillStyle=pal[ch];g.fillRect(x,y,1,1);}});
+  return iconCache[name]=c;
+}
+function drawIcon(name,cx,cy,size){
+  const img=iconImg(name),h=size*img.height/img.width;
+  ctx.imageSmoothingEnabled=false;ctx.drawImage(img,Math.round(cx-size/2),Math.round(cy-h/2),Math.round(size),Math.round(h));ctx.imageSmoothingEnabled=true;
+}
 function drawMiniMap(){
-  const m=Math.max(3,Math.floor(Math.min((cssW-16)/W,(cssH-16)/H)));
-  const ox=Math.floor((cssW-m*W)/2),oy=Math.floor((cssH-m*H)/2);
-  ctx.fillStyle='rgba(11,12,17,.72)';ctx.fillRect(0,0,cssW,cssH);
+  const top=30;
+  const m=Math.max(3,Math.floor(Math.min((cssW-16)/W,(cssH-top-8)/H)));
+  const ox=Math.floor((cssW-m*W)/2),oy=top+Math.floor((cssH-top-8-m*H)/2);
+  ctx.fillStyle='rgba(8,9,13,.9)';ctx.fillRect(0,0,cssW,cssH);
   for(let y=0;y<H;y++)for(let x=0;x<W;x++){
     const i=idx(x,y);if(!G.seen[i]||G.tiles[i]===WALL)continue;
-    ctx.fillStyle=G.tiles[i]===FLOOR?'rgba(141,180,239,.55)':'rgba(141,180,239,.35)';ctx.fillRect(ox+x*m,oy+y*m,m,m);
+    ctx.fillStyle=G.tiles[i]===FLOOR?'#41608f':'#2e4466';ctx.fillRect(ox+x*m,oy+y*m,m,m);
   }
-  if(G.stairs&&G.seen[idx(G.stairs.x,G.stairs.y)]){ctx.fillStyle='#ffffff';ctx.fillRect(ox+G.stairs.x*m-1,oy+G.stairs.y*m-1,m+2,m+2);}
-  for(const it of G.items)if(it.seen){ctx.fillStyle='#7fd8d0';ctx.fillRect(ox+it.x*m+1,oy+it.y*m+1,m-2,m-2);}
-  for(const t of G.traps)if(t.found){ctx.fillStyle='#e9a75a';ctx.fillRect(ox+t.x*m+1,oy+t.y*m+1,m-2,m-2);}
-  for(const mo of G.mons)if(mo.hp>0&&(monVisible(mo))){ctx.fillStyle='#ec6a5c';ctx.fillRect(ox+mo.x*m,oy+mo.y*m,m,m);}
-  ctx.fillStyle='#d9b063';ctx.fillRect(ox+G.p.x*m-1,oy+G.p.y*m-1,m+2,m+2);
-  ctx.font='12px "DotGothic16",sans-serif';ctx.fillStyle='#a29d93';ctx.textAlign='left';ctx.textBaseline='top';
-  ctx.fillText('白=階段　黄=自分　赤=敵　水色=道具　橙=罠',8,8);
+  const at=(x,y)=>[ox+x*m+m/2,oy+y*m+m/2];
+  const base=Math.max(12,Math.min(22,m*2.1));
+  for(const t of G.traps)if(t.found){const [x,y]=at(t.x,t.y);drawIcon('trap',x,y,base*.85);}
+  for(const it of G.items)if(it.seen){const [x,y]=at(it.x,it.y);drawIcon('chest',x,y,base);}
+  if(G.stairs&&G.seen[idx(G.stairs.x,G.stairs.y)]){
+    const [x,y]=at(G.stairs.x,G.stairs.y),sz=base*1.25;
+    ctx.fillStyle='rgba(240,196,94,.25)';ctx.beginPath();ctx.arc(x,y,sz*.85,0,Math.PI*2);ctx.fill();
+    drawIcon('stairs',x,y,sz);
+  }
+  for(const mo of G.mons)if(mo.hp>0&&monVisible(mo)){const [x,y]=at(mo.x,mo.y);drawIcon('enemy',x,y,base*(mo.boss?1.3:.85));}
+  {const [x,y]=at(G.p.x,G.p.y),sz=base*1.25;
+    ctx.fillStyle='rgba(217,176,99,.35)';ctx.beginPath();ctx.arc(x,y,sz*.7,0,Math.PI*2);ctx.fill();
+    drawIcon('hero',x,y,sz);}
+  // 凡例
+  ctx.font='12px "DotGothic16",sans-serif';ctx.fillStyle='#ece6d6';ctx.textAlign='left';ctx.textBaseline='middle';
+  const items=[['chest','道具'],['stairs','階段'],['hero','自分'],['enemy','敵'],['trap','罠']];
+  let lx=10;const ly=15;
+  for(const [ic,label] of items){drawIcon(ic,lx+7,ly,14);ctx.fillText(label,lx+17,ly+1);lx+=17+ctx.measureText(label).width+12;}
 }
 function updateBossBar(){
   const b=G&&G.mons.find(m=>m.boss&&m.hp>0&&monVisible(m));
@@ -1748,7 +1827,7 @@ document.querySelectorAll('#dpad .key').forEach(k=>{
 $('a-attack').addEventListener('click',attackFront);
 $('a-items').addEventListener('click',openInventory);
 $('a-foot').addEventListener('click',footAction);
-$('a-map').addEventListener('click',()=>{if(mode!=='play')return;showMap=!showMap;requestDraw();});
+$('a-map').addEventListener('click',()=>{if(mode!=='play')return;showMap=!showMap;if(showMap)hideBanner();requestDraw();});
 $('a-log').addEventListener('click',openLog);
 $('a-menu').addEventListener('click',openMenu);
 $('modal').addEventListener('click',e=>{if(performance.now()-sheetOpenAt<450){e.stopImmediatePropagation();e.preventDefault();}},true);
@@ -1768,7 +1847,7 @@ window.addEventListener('keydown',e=>{
   if(k==='f'){e.preventDefault();attackFront();}
   else if(k==='i'){e.preventDefault();openInventory();}
   else if(k==='g'||e.key==='>'){e.preventDefault();footAction();}
-  else if(k==='m'){e.preventDefault();showMap=!showMap;requestDraw();}
+  else if(k==='m'){e.preventDefault();showMap=!showMap;if(showMap)hideBanner();requestDraw();}
   else if(k==='escape'&&showMap){showMap=false;requestDraw();}
 });
 window.addEventListener('keyup',()=>{});
