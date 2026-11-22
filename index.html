@@ -22,6 +22,8 @@
   --text: #eef2fb;
   --muted: #9fb1d4;
   --panel: rgba(12, 20, 42, 0.82);
+  --pad: #16244a;          /* 親指を置く場所 */
+  --pad-on: #22356a;
   --font-ui: "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "Noto Sans JP", system-ui, sans-serif;
   --font-display: "Dela Gothic One", "Zen Maru Gothic", "Hiragino Sans", system-ui, sans-serif;
   color-scheme: dark;
@@ -40,6 +42,8 @@ body {
   inset: 0;
   margin: 0 auto;
   max-width: calc(100dvh * 0.8);
+  display: flex;
+  flex-direction: column;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
@@ -48,7 +52,56 @@ body {
   overflow: hidden;
   cursor: pointer;
 }
+#field {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  container-type: size;
+}
 #cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+/* 親指を置く場所（ゲーム画面にかぶらないように下に分けている） */
+#pad {
+  flex: 0 0 auto;
+  height: calc(clamp(120px, 27dvh, 220px) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  box-sizing: border-box;
+  background: var(--pad);
+  border-top: 2px dashed rgba(216, 204, 176, 0.4);
+  display: grid;
+  place-items: center;
+  transition: background 0.08s;
+}
+.pad-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 14px;
+  text-align: center;
+}
+.pad-ring {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 2px dashed rgba(216, 204, 176, 0.45);
+  display: grid;
+  place-items: center;
+  transition: transform 0.08s, border-color 0.08s, background 0.08s;
+}
+.pad-ring svg { width: 30px; height: 30px; }
+.pad-inner small { font-size: 12px; font-weight: 500; opacity: 0.85; }
+#pad.on { background: var(--pad-on); }
+#pad.on .pad-ring { transform: scale(0.92); border-color: var(--kinshi); background: rgba(245, 184, 65, 0.14); }
+#pad.on .pad-inner { color: var(--text); }
+@media (prefers-reduced-motion: reduce) {
+  #pad, .pad-ring { transition: none; }
+}
 
 .hud {
   position: absolute;
@@ -181,16 +234,22 @@ body {
   .cta.ready { animation: none; }
   .score { transition: none; }
 }
-@media (max-height: 520px) {
+@container (max-height: 520px) {
   .panel { gap: 8px; padding: 16px 16px 14px; }
   .logo { font-size: 34px; }
+  .lead { font-size: 13px; }
   .big { font-size: 48px; }
-  .how li { padding: 6px; }
+  .how li { padding: 6px; font-size: 13px; }
+  .how svg { width: 26px; height: 26px; }
+}
+@container (max-height: 380px) {
+  .lead, .how { display: none; }
 }
 </style>
 </head>
 <body>
 <div id="stage">
+ <div id="field">
   <canvas id="cv" aria-label="ゲーム画面"></canvas>
 
   <header class="hud">
@@ -230,6 +289,17 @@ body {
     <p class="eyebrow">一時停止中</p>
     <p class="cta ready">タップで再開</p>
   </section>
+ </div>
+
+  <div id="pad" aria-hidden="true">
+    <div class="pad-inner">
+      <div class="pad-ring">
+        <svg viewBox="0 0 30 30"><path d="M15 23V8M9 13l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <span>ここを押す</span>
+      <small>押している間 上がる ・ はなすと下がる</small>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -251,6 +321,8 @@ body {
 
   const $ = (id) => document.getElementById(id);
   const stage = $('stage');
+  const field = $('field');
+  const pad = $('pad');
   const cv = $('cv');
   const ctx = cv.getContext('2d');
   const ui = {
@@ -284,7 +356,7 @@ body {
   // ---------- 画面サイズ ----------
   let cssW = 1, cssH = 1, dpr = 1, scale = 1, W = 600, bgPat = null;
   function resize() {
-    const r = stage.getBoundingClientRect();
+    const r = field.getBoundingClientRect();
     cssW = Math.max(1, r.width);
     cssH = Math.max(1, r.height);
     dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -774,13 +846,15 @@ body {
   }
 
   // ---------- ループ ----------
-  let last = performance.now(), acc = 0;
+  let last = performance.now(), acc = 0, padOn = false;
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     acc += dt;
     while (acc >= FIXED) { update(FIXED); acc -= FIXED; }
     render();
+    const on = isHolding();
+    if (on !== padOn) { padOn = on; pad.classList.toggle('on', on); }
     requestAnimationFrame(frame);
   }
 
