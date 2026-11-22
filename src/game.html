@@ -206,6 +206,119 @@ const curve={
 const expNeed=lv=>Math.round(8*Math.pow(lv,2.2));
 
 /* ===================== データ ===================== */
+/* 勇者のドット絵（向き4方向×歩き2コマ。右向きは左向きを反転） */
+// 16x16 ドット絵。 . 透明 / k 輪郭 / s 鋼(明) / S 鋼(中) / d 鋼(暗) / g 金 / r 赤 / R 赤(暗) / f 肌 / b 茶 / w 刃 / B 青 / C 青(暗)
+const HERO_PAL={k:'#171923',s:'#dfe6f1',S:'#9eabc2',d:'#5f6b84',g:'#e7b75a',r:'#d24b3e',R:'#86302b',f:'#f1c39b',b:'#6e4a2c',w:'#f4f8ff',B:'#3f6fc4',C:'#284a8c'};
+const HERO={
+down:[
+"......krrk......",
+".....krRRrk.....",
+"....kssSSssk....",
+"...ksssggsssk...",
+"...kskkkkkksk...",
+"..wksfkffkfsk...",
+"..wkkssffsskk...",
+"..wkRRkkkkRRk...",
+".kgkSsgssgsSkkk.",
+".kbkssggggsskBBk",
+".kfkdsSggSsdkBgk",
+"..kkbbgggbbbkBBk",
+"...kSSdkkdSSkkk.",
+"...ksSk..kSsk...",
+"...kbbk..kbbk...",
+"...kkkk..kkkk...",
+],
+down2:[
+"......krrk......",
+".....krRRrk.....",
+"....kssSSssk....",
+"...ksssggsssk...",
+"...kskkkkkksk...",
+"..wksfkffkfsk...",
+"..wkkssffsskk...",
+"..wkRRkkkkRRk...",
+".kgkSsgssgsSkkk.",
+".kbkssggggsskBBk",
+".kfkdsSggSsdkBgk",
+"..kkbbgggbbbkBBk",
+"...kSSdkkdSSkkk.",
+"...kbbk.ksSk....",
+"...kkkk.kbbk....",
+".........kkk....",
+],
+up:[
+"......krrk......",
+".....krRRrk.....",
+"....kssSSssk....",
+"...ksssSSsssk...",
+"...ksssggsssk...",
+"...kSssssssSk...",
+"....kSddddSk..w.",
+"...kRRRRRRRRk.w.",
+"..kRrrrrrrrrRkgk",
+"..kRrrrrRrrrRkbk",
+"..kRrrrrRrrrRk..",
+"..kRrrrrRrrrRk..",
+"...kRRRRRRRRk...",
+"...ksSk..kSsk...",
+"...kbbk..kbbk...",
+"...kkkk..kkkk...",
+],
+up2:[
+"......krrk......",
+".....krRRrk.....",
+"....kssSSssk....",
+"...ksssSSsssk...",
+"...ksssggsssk...",
+"...kSssssssSk...",
+"....kSddddSk..w.",
+"...kRRRRRRRRk.w.",
+"..kRrrrrrrrrRkgk",
+"..kRrrrrRrrrRkbk",
+"..kRrrrrRrrrRk..",
+"..kRrrrrRrrrRk..",
+"...kRRRRRRRRk...",
+"....ksSk.kSsk...",
+"....kbbk.kbbk...",
+"....kkkk.kkkk...",
+],
+left:[
+"........krrk....",
+".......krRRrk...",
+"......kssSSRk...",
+".....ksssssSk...",
+"....kgggggsSk...",
+"....kkkkfsSSk...",
+"....kfkffSSdk...",
+".....kffkkRRRk..",
+"..kkkSsgsSkRrk..",
+".kBBBksggsSkRrk.",
+".kBgBkdsgsdkRrk.",
+".kBBBkbgbbkkRRk.",
+"..kkkdSSSSdkkk..",
+"....kSsk.kSk....",
+"....kbbk.kbk....",
+"....kkkk.kkk....",
+],
+left2:[
+"........krrk....",
+".......krRRrk...",
+"......kssSSRk...",
+".....ksssssSk...",
+"....kgggggsSk...",
+"....kkkkfsSSk...",
+"....kfkffSSdk...",
+".....kffkkRRRk..",
+"..kkkSsgsSkRrk..",
+".kBBBksggsSkRrk.",
+".kBgBkdsgsdkRrk.",
+".kBBBkbgbbkkRRk.",
+"..kkkdSSSSdkkk..",
+"...kSsk...kSk...",
+"..kbbk....kbk...",
+"..kkk.....kkk...",
+],
+};
 const MON={
   rat:{n:'ドブネズミ',e:'🐀',f:[1,5],hp:.8,atk:.9,def:.6,exp:.8},
   bug:{n:'イモムシ',e:'🐛',f:[1,4],hp:1.1,atk:.7,def:.6,exp:.8,ab:['slow']},
@@ -393,6 +506,14 @@ function connect(a,b){
     carveLine(sx,sy,sx,my);carveLine(sx,my,ex,my);carveLine(ex,my,ex,ey);
   }
 }
+function hasDeadEnd(){
+  for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){
+    if(G.tiles[idx(x,y)]!==CORR)continue;
+    let n=0;for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]])if(G.tiles[idx(x+dx,y+dy)]!==WALL)n++;
+    if(n<=1)return true;
+  }
+  return false;
+}
 function genNormal(){
   const GX=3,GY=3,cw=Math.floor(W/GX),ch=Math.floor(H/GY);
   for(let tries=0;tries<50;tries++){
@@ -421,7 +542,17 @@ function genNormal(){
       if(c.gx<GX-1)o.push(a+1);if(c.gy<GY-1)o.push(a+GX);
       if(o.length){const b=pick(o);if(!edges.some(e=>(e[0]===a&&e[1]===b)||(e[0]===b&&e[1]===a)))edges.push([a,b]);}
     }
+    // 部屋のない区画（通路の分岐点）がつながり1本だけだと行き止まりになるので、2本以上にする
+    const linked=(a,b)=>edges.some(e=>(e[0]===a&&e[1]===b)||(e[0]===b&&e[1]===a));
+    cells.forEach((c,ci)=>{
+      if(!c.dummy)return;
+      const nbs=[[1,0],[-1,0],[0,1],[0,-1]].map(([dx,dy])=>[c.gx+dx,c.gy+dy])
+        .filter(([x,y])=>x>=0&&y>=0&&x<GX&&y<GY).map(([x,y])=>y*GX+x);
+      let deg=nbs.filter(n=>linked(ci,n)).length;
+      for(const n of nbs.sort(()=>Math.random()-.5)){if(deg>=2)break;if(!linked(ci,n)){edges.push([ci,n]);deg++;}}
+    });
     for(const [a,b] of edges)connect(cells[a],cells[b]);
+    if(hasDeadEnd())continue;
     break;
   }
   const D=depth(),p=G.p;
@@ -838,7 +969,7 @@ function tryMove(dx,dy){
     playerAttack(m);return true;
   }
   if(!passable(nx,ny)||!diagOK(p.x,p.y,dx,dy)){requestDraw();return false;}
-  p.x=nx;p.y=ny;onStep();
+  p.x=nx;p.y=ny;p.wf=p.wf?0:1;onStep();
   return true;
 }
 function onStep(){
@@ -1060,12 +1191,15 @@ function draw(now){
   { // プレイヤー
     const X=sx(p.x),Y=sy(p.y);
     ctx.fillStyle='rgba(217,176,99,.18)';ctx.beginPath();ctx.arc(X+TS/2,Y+TS/2,TS*.5,0,Math.PI*2);ctx.fill();
-    drawGlyph('🤺',X,Y,.78,1);
-    const [dx,dy]=p.dir;const cx=X+TS/2+dx*TS*.46,cy=Y+TS/2+dy*TS*.46,ang=Math.atan2(dy,dx);
-    ctx.fillStyle=COL.player;ctx.beginPath();
-    ctx.moveTo(cx+Math.cos(ang)*5,cy+Math.sin(ang)*5);
-    ctx.lineTo(cx+Math.cos(ang+2.4)*5,cy+Math.sin(ang+2.4)*5);
-    ctx.lineTo(cx+Math.cos(ang-2.4)*5,cy+Math.sin(ang-2.4)*5);ctx.fill();
+    drawHero(X,Y,p.dir,p.wf);
+    const [dx,dy]=p.dir;
+    if(dx&&dy){ // 斜めを向いているときだけ小さな矢印で補う
+      const cx=X+TS/2+dx*TS*.46,cy=Y+TS/2+dy*TS*.46,ang=Math.atan2(dy,dx);
+      ctx.fillStyle=COL.player;ctx.beginPath();
+      ctx.moveTo(cx+Math.cos(ang)*5,cy+Math.sin(ang)*5);
+      ctx.lineTo(cx+Math.cos(ang+2.4)*5,cy+Math.sin(ang+2.4)*5);
+      ctx.lineTo(cx+Math.cos(ang-2.4)*5,cy+Math.sin(ang-2.4)*5);ctx.fill();
+    }
     if(p.sleep>0){ctx.fillStyle='#8db4ef';ctx.font=`${Math.round(TS*.32)}px sans-serif`;ctx.textAlign='left';ctx.textBaseline='top';ctx.fillText('z',X+TS*.72,Y+1);}
   }
   // 演出
@@ -1083,6 +1217,23 @@ function draw(now){
   if(showMap)drawMiniMap();
   updateBossBar();
   if(FX.length)requestDraw();
+}
+const heroCache={};
+function heroSprite(key,flip){
+  const ck=key+(flip?'_f':'');
+  if(heroCache[ck])return heroCache[ck];
+  const c=document.createElement('canvas');c.width=16;c.height=16;const g=c.getContext('2d');
+  HERO[key].forEach((row,y)=>{for(let i=0;i<16;i++){const ch=row[i];if(ch==='.')continue;g.fillStyle=HERO_PAL[ch];g.fillRect(flip?15-i:i,y,1,1);}});
+  return heroCache[ck]=c;
+}
+function drawHero(X,Y,dir,wf){
+  const [dx,dy]=dir;
+  const base=dx!==0?'left':dy<0?'up':'down';
+  const img=heroSprite(base+(wf?'2':''),dx>0);
+  const size=Math.round(TS*.96);
+  ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(img,Math.round(X+(TS-size)/2),Math.round(Y+TS-size-TS*.02),size,size);
+  ctx.imageSmoothingEnabled=true;
 }
 function drawGlyph(e,X,Y,scale,alpha){
   ctx.globalAlpha=alpha;ctx.font=`${Math.round(TS*scale)}px ${EMOJI_FONT}`;ctx.textAlign='center';ctx.textBaseline='middle';
@@ -1366,6 +1517,20 @@ $('t-new').addEventListener('click',()=>{
 $('t-help').addEventListener('click',()=>{$('title').hidden=true;openHelp(false);});
 
 /* ===================== 入力 ===================== */
+/* ボタンを押したときの振動。Android等は Vibration API、iPhone(iOS 18以降のSafari)はスイッチ要素の触覚フィードバックを利用 */
+let hapLabel=null;
+function haptic(){
+  try{
+    if(navigator.vibrate){navigator.vibrate(18);return;}
+    if(!hapLabel){
+      hapLabel=document.createElement('label');hapLabel.setAttribute('aria-hidden','true');hapLabel.style.display='none';
+      const inp=document.createElement('input');inp.type='checkbox';inp.setAttribute('switch','');inp.tabIndex=-1;
+      hapLabel.appendChild(inp);document.body.appendChild(hapLabel);
+    }
+    hapLabel.click();
+  }catch(e){}
+}
+document.addEventListener('pointerdown',e=>{const b=e.target.closest&&e.target.closest('button');if(b&&!b.disabled)haptic();},true);
 let holdTimer=null,holdDir=null;
 function stopHold(){clearTimeout(holdTimer);holdTimer=null;holdDir=null;}
 function doStep(dx,dy){
