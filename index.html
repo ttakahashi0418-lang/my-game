@@ -158,8 +158,6 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
 .btn.sub:active { box-shadow: 0 0.3cqw 0 #cfc2b2; }
 .row { display: flex; gap: 2.5cqw; }
 .row .btn { flex: 1; min-width: 0; }
-.note { margin: 0; font-size: 3.2cqw; color: var(--sub); line-height: 1.5; }
-.note:empty { display: none; }
 .result {
   font-size: 13cqw;
   font-weight: 800;
@@ -204,11 +202,9 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
         <div class="btns">
           <button class="btn" id="startBtn" type="button">スタート</button>
           <div class="row">
-            <button class="btn sub" id="tiltBtn" type="button" hidden>傾き操作：OFF</button>
             <button class="btn sub" id="soundBtn" type="button">音：ON</button>
           </div>
         </div>
-        <p class="note" id="titleNote"></p>
       </div>
     </div>
 
@@ -325,7 +321,6 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
   // ===== 入力 =====
   const keys = { left: false, right: false };
   const pointers = new Map(); // pointerId -> -1 / 1
-  let tiltOn = false, tiltVal = 0, tiltSeen = false;
 
   function inputDir() {
     let d = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
@@ -360,53 +355,6 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
   const release = (e) => pointers.delete(e.pointerId);
   stage.addEventListener('pointerup', release);
   stage.addEventListener('pointercancel', release);
-
-  // 傾き操作
-  function onOrient(e) {
-    if (e.gamma == null) return;
-    tiltSeen = true;
-    let g = e.gamma;
-    const ang = (screen.orientation && typeof screen.orientation.angle === 'number')
-      ? screen.orientation.angle : (window.orientation || 0);
-    if (ang === 90) g = e.beta;
-    else if (ang === -90 || ang === 270) g = -e.beta;
-    else if (ang === 180) g = -g;
-    tiltVal = g || 0;
-  }
-  function setTitleNote(t) { $('titleNote').textContent = t; }
-  function updateTiltBtn() { $('tiltBtn').textContent = '傾き操作：' + (tiltOn ? 'ON' : 'OFF'); }
-  async function toggleTilt() {
-    if (tiltOn) {
-      tiltOn = false;
-      window.removeEventListener('deviceorientation', onOrient);
-      updateTiltBtn(); setTitleNote('');
-      return;
-    }
-    try {
-      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-        const res = await DeviceOrientationEvent.requestPermission();
-        if (res !== 'granted') throw new Error('denied');
-      }
-      tiltSeen = false; tiltVal = 0;
-      window.addEventListener('deviceorientation', onOrient);
-      tiltOn = true; updateTiltBtn();
-      setTitleNote('スマホを左右に傾けると動きます');
-      setTimeout(() => {
-        if (tiltOn && !tiltSeen) {
-          tiltOn = false;
-          window.removeEventListener('deviceorientation', onOrient);
-          updateTiltBtn();
-          setTitleNote('この画面では傾きセンサーが使えないようです。画面の左右を押して動かしてください。');
-        }
-      }, 1500);
-    } catch (err) {
-      tiltOn = false; updateTiltBtn();
-      setTitleNote('傾き操作が許可されませんでした。画面の左右を押して動かしてください。');
-    }
-  }
-  if (typeof DeviceOrientationEvent !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0)) {
-    $('tiltBtn').hidden = false;
-  }
 
   // ===== ゲーム状態 =====
   let state = 'title'; // title / play / paused / over
@@ -482,7 +430,6 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
   function step(dt) {
     // 横移動
     let target = inputDir() * MAXVX;
-    if (target === 0 && tiltOn) target = clamp(tiltVal / 22, -1, 1) * MAXVX;
     if (state === 'title') target = 0;
     player.vx += (target - player.vx) * Math.min(1, dt * 10);
     player.x += player.vx * dt;
@@ -840,7 +787,6 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
   $('pauseBtn').addEventListener('click', pause);
   $('resumeBtn').addEventListener('click', resume);
   $('quitBtn').addEventListener('click', toTitle);
-  $('tiltBtn').addEventListener('click', toggleTilt);
   function updateSoundBtn() { $('soundBtn').textContent = '音：' + (soundOn ? 'ON' : 'OFF'); }
   $('soundBtn').addEventListener('click', () => {
     soundOn = !soundOn;
